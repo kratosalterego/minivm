@@ -1,56 +1,121 @@
-// src/util/endian.rs
+use crate::error::Result;
+use crate::isa::Instruction;
+use crate::util::endian::{read_u16_le, read_i64_le, read_u64_le};
 
-/// Reads a 16-bit unsigned integer from a byte slice at the given offset using Little Endian.
-#[inline(always)]
-pub fn read_u16_le(bytes: &[u8], offset: usize) -> u16 {
-    let src = &bytes[offset..offset + 2];
-    u16::from_le_bytes([src[0], src[1]])
+pub struct Decoder<'a> {
+    bytecode: &'a [u8],
+    cursor: usize,
 }
 
-/// Reads a 32-bit signed integer from a byte slice at the given offset using Little Endian.
-#[inline(always)]
-pub fn read_i32_le(bytes: &[u8], offset: usize) -> i32 {
-    let src = &bytes[offset..offset + 4];
-    i32::from_le_bytes([src[0], src[1], src[2], src[3]])
-}
+impl<'a> Decoder<'a> {
+    pub fn new(bytecode: &'a [u8]) -> Self {
+        Self {
+            bytecode,
+            cursor: 0,
+        }
+    }
 
-/// Reads a 64-bit signed integer from a byte slice at the given offset using Little Endian.
-#[inline(always)]
-pub fn read_i64_le(bytes: &[u8], offset: usize) -> i64 {
-    let src = &bytes[offset..offset + 8];
-    i64::from_le_bytes([
-        src[0], src[1], src[2], src[3],
-        src[4], src[5], src[6], src[7],
-    ])
-}
+    pub fn current_offset(&self) -> usize {
+        self.cursor
+    }
 
-/// Reads a 64-bit unsigned integer from a byte slice at the given offset using Little Endian.
-#[inline(always)]
-pub fn read_u64_le(bytes: &[u8], offset: usize) -> u64 {
-    let src = &bytes[offset..offset + 8];
-    u64::from_le_bytes([
-        src[0], src[1], src[2], src[3],
-        src[4], src[5], src[6], src[7],
-    ])
-}
+    pub fn set_offset(&mut self, offset: usize) {
+        self.cursor = offset;
+    }
 
-/// Writes a 16-bit unsigned integer into a mutable byte slice at the given offset using Little Endian.
-#[inline(always)]
-pub fn write_u16_le(bytes: &mut [u8], offset: usize, value: u16) {
-    let dst = &mut bytes[offset..offset + 2];
-    dst.copy_from_slice(&value.to_le_bytes());
-}
+    pub fn is_at_end(&self) -> bool {
+        self.cursor >= self.bytecode.len()
+    }
 
-/// Writes a 64-bit signed integer into a mutable byte slice at the given offset using Little Endian.
-#[inline(always)]
-pub fn write_i64_le(bytes: &mut [u8], offset: usize, value: i64) {
-    let dst = &mut bytes[offset..offset + 8];
-    dst.copy_from_slice(&value.to_le_bytes());
-}
+    pub fn decode_next(&mut self) -> Result<Option<Instruction>> {
+        if self.is_at_end() {
+            return Ok(None);
+        }
 
-/// Writes a 64-bit unsigned integer into a mutable byte slice at the given offset using Little Endian.
-#[inline(always)]
-pub fn write_u64_le(bytes: &mut [u8], offset: usize, value: u64) {
-    let dst = &mut bytes[offset..offset + 8];
-    dst.copy_from_slice(&value.to_le_bytes());
+        let opcode = self.bytecode[self.cursor];
+        self.cursor += 1;
+
+        let inst = match opcode {
+            0x00 => Instruction::Nop,
+            0xFF => Instruction::Halt,
+            
+            0x10 => Instruction::Add,
+            0x11 => Instruction::Sub,
+            0x12 => Instruction::Mul,
+            0x13 => Instruction::Div,
+            0x14 => Instruction::Ret,
+
+            0x20 => {
+                let reg = self.read_u8()?;
+                Instruction::Pop(reg)
+            }
+
+            0x21 => {
+                let reg = self.read_u8()?;
+                let immediate = self.read_i64()?;
+                Instruction::Push(reg, immediate)
+            }
+
+            0x30 => {
+                let target = self.read_u64()?;
+                Instruction::Jmp(target)
+            }
+            0x31 => {
+                let target = self.read_u64()?;
+                Instruction::Jz(target)
+            }
+            0x32 => {
+                let target = self.read_u64()?;
+                Instruction::Jnz(target)
+            }
+
+            0x40 => {
+                let reg = self.read_u8()?;
+                let addr = self.read_u64()?;
+                Instruction::Load(reg, addr)
+            }
+            0x41 => {
+                let reg = self.read_u8()?;
+                let addr = self.read_u64()?;
+                Instruction::Store(reg, addr)
+            }
+
+            unknown => {
+                return Err(format!(
+                    "Decoding Error: Encountered undefined opcode '0x{:02X}' at address 0x{:04X}",
+                    unknown, self.cursor - 1
+                ).into());
+            }
+        };
+
+        Ok(Some(inst))
+    }
+
+
+    fn read_u8(&mut self) -> Result<u8> {
+        if self.cursor >= self.bytecode.len() {
+            return Err("Decoding Error: Unexpected EOF while fetching u8 operand.".into());
+        }
+        let val = self.bytecode[self.cursor];
+        self.cursor += 1;
+        Ok(val)
+    }
+
+    fn read_i64(&mut self) -> Result<i64> {
+        if self.cursor + 8 > self.bytecode.len() {
+            return Err("Decoding Error: Unexpected EOF while fetching i64 operand.".into());
+        }
+        let val = read_i64_le(self.bytecode, self.cursor);
+        self.cursor += 8;
+        Ok(val)
+    }
+
+    fn read_u64(&mut self) -> Result<u64> {
+        if self.cursor + 8 > self.bytecode.len() {
+            return Err("Decoding Error: Unexpected EOF while fetching u64 operand.".into());
+        }
+        let val = read_u64_le(self.bytecode, self.cursor);
+        self.cursor += 8;
+        Ok(val)
+    }
 }

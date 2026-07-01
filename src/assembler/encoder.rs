@@ -1,4 +1,5 @@
 use crate::assembler::parser::{AssembledProgram, ParsedInstruction, Operand};
+use crate::bytecode::write_header;
 use std::collections::HashMap;
 
 pub struct Encoder {
@@ -43,7 +44,12 @@ impl Encoder {
             self.encode_instruction(inst, inst_offset, &label_addresses)?;
         }
 
-        Ok(self.bytecode.clone())
+        // Prepend the standard binary header expected by consumers/tests
+        let mut out = Vec::new();
+        write_header(&mut out);
+        out.extend_from_slice(&self.bytecode);
+
+        Ok(out)
     }
 
     fn calculate_instruction_size(&self, inst: &ParsedInstruction) -> Result<usize, String> {
@@ -51,14 +57,19 @@ impl Encoder {
 
         let operands_size = match inst.opcode.to_lowercase().as_str() {
             "halt" | "nop" | "add" | "sub" | "mul" | "div" | "ret" => 0,
-            
-            "pop" => 1,
+
+            "pop" | "syscall" => 1,
 
             "jmp" | "jz" | "jnz" => 8,
 
             "push" | "load" | "store" => 1 + 8,
 
-            _ => return Err(format!("Unknown opcode '{}' at line {}, col {}", inst.opcode, inst.loc.line, inst.loc.column)),
+            _ => {
+                return Err(format!(
+                    "Unknown opcode '{}' at line {}, col {}",
+                    inst.opcode, inst.loc.line, inst.loc.column
+                ));
+            }
         };
 
         Ok(base_size + operands_size)
@@ -78,28 +89,54 @@ impl Encoder {
             "sub"  => self.bytecode.push(0x11),
             "mul"  => self.bytecode.push(0x12),
             "div"  => self.bytecode.push(0x13),
+            "ret"  => self.bytecode.push(0x14),
 
             "pop" => {
-                self.bytecode.push(0x20); 
+                self.bytecode.push(0x20);
                 self.encode_register(&inst.operands[0], inst)?;
             }
 
             "push" => {
-                self.bytecode.push(0x21); 
+                self.bytecode.push(0x21);
                 self.encode_register(&inst.operands[0], inst)?;
                 self.encode_immediate(&inst.operands[1], inst)?;
             }
 
             "jmp" => {
-                self.bytecode.push(0x30); 
+                self.bytecode.push(0x30);
                 self.encode_jump_target(&inst.operands[0], current_offset, label_addresses, inst)?;
             }
             "jz" => {
-                self.bytecode.push(0x31); 
+                self.bytecode.push(0x31);
+                self.encode_jump_target(&inst.operands[0], current_offset, label_addresses, inst)?;
+            }
+            "jnz" => {
+                self.bytecode.push(0x32);
                 self.encode_jump_target(&inst.operands[0], current_offset, label_addresses, inst)?;
             }
 
-            _ => unreachable!(),
+            "load" => {
+                self.bytecode.push(0x40);
+                self.encode_register(&inst.operands[0], inst)?;
+                self.encode_address(&inst.operands[1], inst)?;
+            }
+            "store" => {
+                self.bytecode.push(0x41);
+                self.encode_register(&inst.operands[0], inst)?;
+                self.encode_address(&inst.operands[1], inst)?;
+            }
+
+            "syscall" => {
+                self.bytecode.push(0x50);
+                self.encode_trap_code(&inst.operands[0], inst)?;
+            }
+
+            _ => {
+                return Err(format!(
+                    "Unknown opcode '{}' at line {}, col {}",
+                    inst.opcode, inst.loc.line, inst.loc.column
+                ));
+            }
         }
 
         Ok(())
@@ -137,10 +174,48 @@ impl Encoder {
         }
     }
 
+    fn encode_address(&mut self, operand: &Operand, inst: &ParsedInstruction) -> Result<(), String> {
+        match operand {
+            Operand::Integer(val) => {
+                if *val < 0 {
+                    return Err(format!(
+                        "Expected non-negative memory address for opcode '{}' at line {}",
+                        inst.opcode, inst.loc.line
+                    ));
+                }
+                self.bytecode.extend_from_slice(&(*val as u64).to_le_bytes());
+                Ok(())
+            }
+            _ => Err(format!(
+                "Expected address literal for opcode '{}' at line {}",
+                inst.opcode, inst.loc.line
+            )),
+        }
+    }
+
+    fn encode_trap_code(&mut self, operand: &Operand, inst: &ParsedInstruction) -> Result<(), String> {
+        match operand {
+            Operand::Integer(val) => {
+                if *val < 0 || *val > u8::MAX as i64 {
+                    return Err(format!(
+                        "Trap code must fit in a byte for opcode '{}' at line {}",
+                        inst.opcode, inst.loc.line
+                    ));
+                }
+                self.bytecode.push(*val as u8);
+                Ok(())
+            }
+            _ => Err(format!(
+                "Expected trap code literal for opcode '{}' at line {}",
+                inst.opcode, inst.loc.line
+            )),
+        }
+    }
+
     fn encode_jump_target(
-        &mut self, 
-        operand: &Operand, 
-        current_offset: usize,
+        &mut self,
+        operand: &Operand,
+        _current_offset: usize,
         label_addresses: &HashMap<&str, usize>,
         inst: &ParsedInstruction
     ) -> Result<(), String> {

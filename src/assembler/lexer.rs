@@ -1,5 +1,4 @@
 use std::str::CharIndices;
-use crate::error::Result; 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Location {
@@ -94,6 +93,12 @@ impl<'a> Lexer<'a> {
         }
         if c == '\n' {
             return Ok(Token { kind: TokenKind::NewLine, lexeme: "\n", loc });
+        }
+
+        // Allow disassembler-style address prefixes (e.g. "0x0000:") by
+        // ignoring standalone colon characters between tokens.
+        if c == ':' {
+            return self.next_token();
         }
 
         if c == '"' {

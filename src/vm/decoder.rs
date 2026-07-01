@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::isa::Instruction;
-use crate::util::endian::{read_u16_le, read_i64_le, read_u64_le};
+use crate::util::endian::{read_i64_le, read_u64_le};
 
 pub struct Decoder<'a> {
     bytecode: &'a [u8],
@@ -78,6 +78,11 @@ impl<'a> Decoder<'a> {
                 let reg = self.read_u8()?;
                 let addr = self.read_u64()?;
                 Instruction::Store(reg, addr)
+            }
+
+            0x50 => {
+                let trap_code = self.read_u8()?;
+                Instruction::Syscall(trap_code)
             }
 
             unknown => {

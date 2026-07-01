@@ -1,5 +1,6 @@
 use crate::error::Result;
 
+#[derive(Debug)]
 pub struct Globals {
     memory: Vec<i64>,
 }

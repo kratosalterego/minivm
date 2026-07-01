@@ -3,9 +3,11 @@ use crate::isa::Instruction;
 use crate::vm::decoder::Decoder;
 use crate::vm::stack::Stack;
 use crate::vm::globals::Globals;
+use crate::vm::traps;
 
 pub const NUM_REGISTERS: usize = 16;
 
+#[derive(Debug)]
 pub struct Cpu {
     pub registers: [i64; NUM_REGISTERS],
     pub pc: usize,          
@@ -141,6 +143,10 @@ impl Cpu {
             Instruction::Ret => {
                 let return_address = self.stack.pop()?;
                 self.pc = return_address as usize;
+            }
+
+            Instruction::Syscall(trap_code) => {
+                traps::handle_trap(trap_code, self)?;
             }
         }
 

@@ -26,7 +26,11 @@ impl<'a> Disassembler<'a> {
                 Ok(Some(instruction)) => {
                     let rendered_instruction = printer::format_instruction(&instruction);
                     
-                    output.push_str(&format!("0x{:04X}:  {}\n", current_offset, rendered_instruction));
+                    // Emit a commented address prefix for human readers/tests, then
+                    // emit the plain instruction on the following line so the
+                    // assembler/lexer can re-parse the disassembly during roundtrips.
+                    output.push_str(&format!("; 0x{:04X}:  {}\n", current_offset, rendered_instruction));
+                    output.push_str(&format!("{}\n", rendered_instruction));
                     
                     if matches!(instruction, Instruction::Halt) {
                         break;

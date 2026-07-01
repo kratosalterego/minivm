@@ -1,6 +1,5 @@
 // src/error.rs
 
-use crate::assembler::lexer::Location;
 use thiserror::Error;
 
 /// The central Result type used across the miniVM project workspace.
@@ -13,17 +12,19 @@ pub enum MiniVmError {
     Io(#[from] std::io::Error),
 
     /// Errors caught during tokenization or structural string slicing
-    #[error("Lexical Analysis Error at line {loc.line}, col {loc.column}: {message}")]
+    #[error("Lexical Analysis Error at line {line}, col {column}: {message}")]
     Lexical {
         message: String,
-        loc: Location,
+        line: usize,
+        column: usize,
     },
 
     /// Errors caught during the grammar translation parsing loop
-    #[error("Parsing Syntax Error at line {loc.line}, col {loc.column}: {message}")]
+    #[error("Parsing Syntax Error at line {line}, col {column}: {message}")]
     Syntax {
         message: String,
-        loc: Location,
+        line: usize,
+        column: usize,
     },
 
     /// Errors caught during label resolution or instruction serialization sizing

@@ -1,0 +1,8 @@
+; Simple add-and-print program
+push r0, 10
+push r0, 32
+add
+syscall 1        ; PrintInt
+push r0, 10
+syscall 2        ; PrintChar (newline)
+halt

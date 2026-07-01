@@ -1,5 +1,6 @@
 use crate::error::Result;
 
+#[derive(Debug)]
 pub struct Stack {
     data: Vec<i64>,
     capacity: usize,

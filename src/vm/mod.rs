@@ -8,6 +8,7 @@ pub mod traps;
 use crate::error::Result;
 use self::cpu::Cpu;
 
+#[derive(Debug)]
 pub struct VmConfig {
     pub stack_size: usize,
     pub globals_size: usize,
@@ -24,6 +25,7 @@ impl Default for VmConfig {
     }
 }
 
+#[derive(Debug)]
 pub struct Vm {
     config: VmConfig,
     cpu: Cpu,

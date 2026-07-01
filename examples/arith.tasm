@@ -1,0 +1,5 @@
+push r0, 20
+push r1, 22
+add
+pop r0
+halt

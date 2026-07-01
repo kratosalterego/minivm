@@ -33,6 +33,9 @@ pub fn format_instruction(inst: &Instruction) -> String {
         Instruction::Jnz(target) => {
             format!("jnz  0x{:04X}", target)
         }
+        Instruction::Syscall(code) => {
+            format!("syscall 0x{:02X}", code)
+        }
     }
 }
 

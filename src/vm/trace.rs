@@ -50,5 +50,6 @@ fn format_instruction_brief(inst: &Instruction) -> String {
         Instruction::Jmp(target) => format!("jmp  0x{:04X}", target),
         Instruction::Jz(target) => format!("jz   0x{:04X}", target),
         Instruction::Jnz(target) => format!("jnz  0x{:04X}", target),
+        Instruction::Syscall(code) => format!("syscall 0x{:02X}", code),
     }
 }

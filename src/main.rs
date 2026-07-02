@@ -1,12 +1,22 @@
+// src/main.rs
+
+// 1. Declare all the structural project submodules
+mod bytecode;
+mod cli;          // <-- MAKE SURE THIS LINE IS PRESENT AND NOT MISSING OR TYPO'D!
+mod isa;
+mod error;
+mod assembler;
+mod vm;
+mod disassembler;
+mod util;
+
+// 2. Bring items into global scope for clean routing
 use clap::Parser;
-use minivm::assembler;
-use minivm::bytecode;
-use minivm::cli::{Cli, Commands};
-use minivm::disassembler;
-use minivm::error;
-use minivm::util;
-use minivm::vm::{self, VmConfig};
+use cli::{Cli, Commands}; // This pulls in your custom arguments structures
+use vm::VmConfig;
 use std::process;
+
+// ... the rest of your main.rs functions (handle_assemble, handle_run, etc.)
 
 fn main() {
     let args = Cli::parse();
@@ -21,8 +31,8 @@ fn main() {
     }
 }
 
-fn handle_assemble(args: minivm::cli::AssembleArgs) -> error::Result<()> {
-    let output_path = args.output.unwrap_or_else(|| {
+fn handle_assemble(args: cli::AssembleArgs) -> error::Result<()> {
+        let output_path = args.output.unwrap_or_else(|| {
         let mut path = args.input.clone();
         path.set_extension("bin");
         path
@@ -51,13 +61,17 @@ fn handle_assemble(args: minivm::cli::AssembleArgs) -> error::Result<()> {
         .into()),
     }
 }
+// src/main.rs -> inside handle_run()
 
-fn handle_run(args: minivm::cli::RunArgs) -> error::Result<()> {
+fn handle_run(args: cli::RunArgs) -> error::Result<()> {
+            // 1. Load the binary file from disk
     let raw_bytes = util::file::read_binary_file(&args.input)?;
 
-    let header_offset =
-        bytecode::verify_header(&raw_bytes).map_err(error::MiniVmError::InvalidBinaryHeader)?;
-
+    // 2. Verify the header and get the starting index offset (should be 6)
+    let header_offset = bytecode::verify_header(&raw_bytes)
+        .map_err(|e| error::MiniVmError::InvalidBinaryHeader(e))?;
+    
+    // 3. CRITICAL: Slice the array to completely skip the header bytes!
     let executable_bytecode = &raw_bytes[header_offset..];
 
     let config = VmConfig {
@@ -67,14 +81,17 @@ fn handle_run(args: minivm::cli::RunArgs) -> error::Result<()> {
     };
 
     println!("Executing {} ...", args.input.display());
-
+    
     let mut vm = vm::Vm::new(config);
+    
+    // 4. CRITICAL: Pass the sliced 'executable_bytecode', NOT 'raw_bytes'!
     vm.execute(executable_bytecode)?;
 
     Ok(())
 }
 
-fn handle_disassemble(args: minivm::cli::DisassembleArgs) -> error::Result<()> {
+fn handle_disassemble(args: cli::DisassembleArgs) -> error::Result<()> {
+    
     let raw_bytes = util::file::read_binary_file(&args.input)?;
 
     let header_offset =

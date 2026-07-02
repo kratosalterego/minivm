@@ -44,10 +44,7 @@ fn handle_assemble(args: cli::AssembleArgs) -> error::Result<()> {
 
     match assembler::compile(&source_code) {
         Ok(bytecode_body) => {
-            let mut output = Vec::new();
-            bytecode::write_header(&mut output);
-            output.extend_from_slice(&bytecode_body);
-            util::file::write_binary_file(&output_path, &output)?;
+            util::file::write_binary_file(&output_path, &bytecode_body)?;
             println!(
                 "\x1b[1;32mSuccess\x1b[0m: Written to {}",
                 output_path.display()
